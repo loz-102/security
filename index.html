@@ -230,7 +230,9 @@
             startTimerInterval();
           }
         }
-      } catch {}
+      } catch (err) {
+        console.error("שגיאת שחזור:", err);
+      }
     }
 
     function startCountdown() {
