@@ -5,15 +5,20 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-exports.handler = async () => {
-  const endStr = await redis.get("timer:default:end");
-  if (!endStr) {
-    return { statusCode: 200, body: JSON.stringify({ active: false }) };
-  }
+exports.handler = async (event, context) => {
+  try {
+    const endStr = await redis.get("timer:default:end");
+    if (!endStr) {
+      return { statusCode: 200, body: JSON.stringify({ active: false }) };
+    }
 
-  const endTime = parseInt(endStr);
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ active: true, endTime })
-  };
+    const endTime = parseInt(endStr, 10);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ active: true, endTime })
+    };
+  } catch (error) {
+    console.error(error);
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+  }
 };
