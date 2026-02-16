@@ -1,8 +1,18 @@
+# הגדרות בסיסיות לבנייה
 [build]
-  functions = "netlify/functions"
-  publish = "."  # או התיקייה של index.html אם יש
+  publish = "."                  # אם index.html ב-root, או שנה לתיקייה אם יש
+  functions = "netlify/functions"  # תיקיית הפונקציות
+  command = ""                   # אין צורך ב-build command לאתר סטטי
 
+# אם אתה רוצה redirects פשוטים (אופציונלי, לא חובה)
 [[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
+  from = "/*"
+  to = "/index.html"
   status = 200
+
+# אם אתה רוצה לשמור על HTTPS תמיד (מומלץ)
+[[redirects]]
+  from = "http://*"
+  to = "https://:splat"
+  status = 301
+  force = true
