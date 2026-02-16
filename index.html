@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>מנגנון אבטחה</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg: #000;
+      --text: #0c3;
+      --text-dim: #0a2f0a;
+      --accent: #1a5f1a;
+      --glow: #0f3;
+      --spacing: 1.2rem;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      gap: var(--spacing);
+      text-align: center;
+    }
+
+    h1 { font-size: clamp(1.6rem, 5vw, 2.2rem); letter-spacing: 0.25em; color: var(--text-dim); text-shadow: 0 0 6px var(--text); opacity: 0.9; margin-bottom: 0.5rem; }
+
+    #timer { font-size: clamp(4rem, 12vw, 7rem); letter-spacing: 0.12em; color: var(--text); text-shadow: 0 0 10px var(--text); min-width: 280px; margin: 0.5rem 0; }
+
+    .idle  { opacity: 0.45; }
+    .count { color: var(--accent); text-shadow: 0 0 14px var(--accent); }
+    .done  { color: var(--glow); text-shadow: 0 0 20px var(--glow); }
+
+    .controls, .inputs { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1rem; max-width: 100%; width: 100%; padding: 0 0.5rem; }
+
+    input[type="number"], input[type="password"], input[type="text"], button {
+      font-family: inherit;
+      font-size: clamp(1.1rem, 4vw, 1.4rem);
+      padding: clamp(0.6rem, 3vw, 0.9rem) clamp(1rem, 4vw, 1.4rem);
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--text-dim);
+      outline: none;
+      border-radius: 4px;
+      min-width: 140px;
+      touch-action: manipulation;
+    }
+
+    input:focus, button:focus { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+    button { cursor: pointer; transition: all 0.2s; }
+    button:hover, button:active { background: var(--accent); color: #000; }
+
+    #abort-input, #duress-input { display: none; width: 100%; max-width: 240px; text-align: center; border-color: var(--text-dim); }
+    #abort-input.active, #duress-input.active { display: block; }
+
+    #live-loc { font-size: clamp(0.9rem, 3.5vw, 1.1rem); color: var(--text); opacity: 0.75; margin: 0.5rem 0; word-break: break-all; }
+
+    #status { font-size: clamp(1rem, 4vw, 1.3rem); min-height: 2rem; color: var(--text); opacity: 0.85; }
+
+    @media (min-width: 480px) { body { padding: 2rem; gap: 2rem; } .controls, .inputs { flex-wrap: nowrap; max-width: 500px; } }
+    @media (min-width: 768px) { h1 { font-size: 2.8rem; } #timer { font-size: 8rem; } input, button { font-size: 1.6rem; padding: 1rem 1.8rem; } }
+  </style>
+</head>
+<body>
+
+  <h1>מנגנון אבטחה</h1>
+
+  <div id="timer" class="idle">00:00</div>
+
+  <div class="controls">
+    <input type="number" id="seconds" min="10" value="300" placeholder="שניות">
+    <button id="start">הפעל</button>
+  </div>
+
+  <div class="inputs">
+    <input type="password" id="master-pass" placeholder="סיסמה ראשית">
+  </div>
+
+  <input type="text" id="abort-input" autocomplete="off" autocorrect="off" spellcheck="false">
+  <input type="text" id="duress-input" autocomplete="off" autocorrect="off" spellcheck="false">
+
+  <div id="live-loc">מיקום: לא זמין</div>
+  <div id="status"></div>
+
+  <script>
+    const MASTER_PASSWORD = "07101952";
+
+    const TELEGRAM_TOKEN = "8579388433:AAGZqjArwpMMPZUPfN3_YZYgoAQi768Wz3Q";
+    const TELEGRAM_CHAT  = -5223902644;
+
+    const abortFragments = ['P','a','n','a','m','a'];
+    const duressFragments = ['D','u','r','e','s','s','1','2','3'];
+
+    const abortSecret = abortFragments.join('').toUpperCase();
+    const duressSecret = duressFragments.join('').toUpperCase();
+
+    function checkSecret(input, target) {
+      return input.trim().toUpperCase() === target;
+    }
+
+    let timerId = null;
+    let remaining = 0;
+    let watchId = null;
+    let currentPosition = null;
+    let batteryLevel = "לא זמין";
+
+    const timerEl     = document.getElementById('timer');
+    const startBtn    = document.getElementById('start');
+    const secInput    = document.getElementById('seconds');
+    const masterPass  = document.getElementById('master-pass');
+    const abortField  = document.getElementById('abort-input');
+    const duressField = document.getElementById('duress-input');
+    const locEl       = document.getElementById('live-loc');
+    const statusEl    = document.getElementById('status');
+
+    function pad(n) { return n < 10 ? '0' + n : n; }
+    function format(t) { return pad(Math.floor(t/60)) + ':' + pad(t % 60); }
+
+    function startLiveLocation() {
+      if (!navigator.geolocation) {
+        locEl.textContent = "מיקום: לא נתמך";
+        return;
+      }
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          currentPosition = pos.coords;
+          locEl.textContent = `מיקום: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)} (±${pos.coords.accuracy.toFixed(0)}מ)`;
+        },
+        err => { locEl.textContent = "מיקום: שגיאה"; },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 15000 }
+      );
+    }
+
+    function stopLiveLocation() {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+    }
+
+    async function getBatteryLevel() {
+      if ("getBattery" in navigator) {
+        try {
+          const battery = await navigator.getBattery();
+          batteryLevel = Math.round(battery.level * 100) + "%";
+        } catch {}
+      }
+    }
+
+    async function sendAlert(type = "רגיל") {
+      await getBatteryLevel();
+
+      let message = type === "duress"
+        ? "מצוקה דחופה! אני תחת כפייה – אל תאמינו לשום דבר נוסף!\n\n"
+        : "Alert – אני בסכנה!\n\n";
+
+      if (currentPosition) {
+        message += `מיקום: https://maps.google.com/?q=${currentPosition.latitude},${currentPosition.longitude}\n`;
+        message += `דיוק: ±${currentPosition.accuracy.toFixed(0)} מטר\n`;
+      } else {
+        message += "מיקום: לא זמין\n";
+      }
+
+      message += `אחוז סוללה: ${batteryLevel}\n`;
+      message += `זמן: ${new Date().toLocaleString('he-IL')}`;
+
+      statusEl.textContent = type === "duress" ? "מצוקה נשלחה" : "התראה נשלחה";
+
+      try {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: TELEGRAM_CHAT, text: message })
+        });
+      } catch (e) { console.error(e); }
+
+      setTimeout(reset, 4000);
+    }
+
+    function reset() {
+      if (timerId) clearInterval(timerId);
+      stopLiveLocation();
+      timerId = null;
+      remaining = 0;
+      timerEl.textContent = '00:00';
+      timerEl.className = 'idle';
+      abortField.classList.remove('active');
+      duressField.classList.remove('active');
+      abortField.value = '';
+      duressField.value = '';
+      startBtn.disabled = false;
+      statusEl.textContent = '';
+    }
+
+    function startCountdown() {
+      if (masterPass.value !== MASTER_PASSWORD) {
+        statusEl.textContent = "סיסמה שגויה";
+        return;
+      }
+
+      const s = parseInt(secInput.value, 10);
+      if (!s || s < 10) {
+        statusEl.textContent = "מינימום 10 שניות";
+        return;
+      }
+
+      reset();
+      startLiveLocation();
+
+      remaining = s;
+      timerEl.textContent = format(remaining);
+      timerEl.className = 'count';
+      abortField.classList.add('active');
+      duressField.classList.add('active');
+      abortField.focus();
+      startBtn.disabled = true;
+      statusEl.textContent = '';
+
+      timerId = setInterval(() => {
+        remaining--;
+        timerEl.textContent = format(remaining);
+
+        if (remaining <= 0) {
+          clearInterval(timerId);
+          timerEl.className = 'done';
+          timerEl.textContent = '00:00';
+          sendAlert("רגיל");
+        }
+      }, 1000);
+    }
+
+    function checkInputs() {
+      const aVal = abortField.value.trim().toUpperCase();
+      const dVal = duressField.value.trim().toUpperCase();
+
+      if (checkSecret(aVal, abortSecret)) {
+        reset();
+        statusEl.textContent = 'בוטל בהצלחה';
+      } else if (checkSecret(dVal, duressSecret)) {
+        reset();
+        sendAlert("duress");
+      }
+    }
+
+    abortField.oninput = checkInputs;
+    duressField.oninput = checkInputs;
+    startBtn.onclick = startCountdown;
+
+    reset();
+  </script>
+</body>
+</html>
