@@ -214,26 +214,43 @@
       reset();
       startLiveLocation();
 
-      remaining = s;
-      timerEl.textContent = format(remaining);
-      timerEl.className = 'count';
-      abortField.classList.add('active');
-      duressField.classList.add('active');
-      abortField.focus();
-      startBtn.disabled = true;
-      statusEl.textContent = '';
+      fetch("/.netlify/functions/start-timer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ duration: s })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          statusEl.textContent = "טיימר הופעל בשרת!";
 
-      timerId = setInterval(() => {
-        remaining--;
-        timerEl.textContent = format(remaining);
+          remaining = s;
+          timerEl.textContent = format(remaining);
+          timerEl.className = 'count';
+          abortField.classList.add('active');
+          duressField.classList.add('active');
+          abortField.focus();
+          startBtn.disabled = true;
 
-        if (remaining <= 0) {
-          clearInterval(timerId);
-          timerEl.className = 'done';
-          timerEl.textContent = '00:00';
-          sendAlert("רגיל");
+          timerId = setInterval(() => {
+            remaining--;
+            timerEl.textContent = format(remaining);
+
+            if (remaining <= 0) {
+              clearInterval(timerId);
+              timerEl.className = 'done';
+              timerEl.textContent = '00:00';
+              sendAlert("רגיל"); // התראה מקומית – האמיתית תגיע מהשרת
+            }
+          }, 1000);
+        } else {
+          statusEl.textContent = "שגיאה: " + (data.body || "לא ידוע");
         }
-      }, 1000);
+      })
+      .catch(err => {
+        statusEl.textContent = "שגיאת חיבור לשרת";
+        console.error(err);
+      });
     }
 
     function checkInputs() {
