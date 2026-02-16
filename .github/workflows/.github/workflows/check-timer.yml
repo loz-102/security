@@ -2,7 +2,7 @@ name: Check Timer Every 5 Minutes
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '* * * * *'
 
 jobs:
   check:
