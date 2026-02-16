@@ -42,7 +42,7 @@
 
     .controls, .inputs { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1rem; max-width: 100%; width: 100%; padding: 0 0.5rem; }
 
-    input[type="number"], input[type="password"], input[type="text"], button {
+    input, button {
       font-family: inherit;
       font-size: clamp(1.1rem, 4vw, 1.4rem);
       padding: clamp(0.6rem, 3vw, 0.9rem) clamp(1rem, 4vw, 1.4rem);
@@ -199,6 +199,40 @@
       statusEl.textContent = '';
     }
 
+    function startTimerInterval() {
+      timerId = setInterval(() => {
+        remaining--;
+        timerEl.textContent = format(remaining);
+
+        if (remaining <= 0) {
+          clearInterval(timerId);
+          timerEl.className = 'done';
+          timerEl.textContent = '00:00';
+          sendAlert("רגיל");
+        }
+      }, 1000);
+    }
+
+    async function restoreTimer() {
+      try {
+        const res = await fetch("/.netlify/functions/get-timer-status");
+        const data = await res.json();
+        if (data.active) {
+          const left = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
+          if (left > 0) {
+            remaining = left;
+            timerEl.textContent = format(remaining);
+            timerEl.className = 'count';
+            abortField.classList.add('active');
+            duressField.classList.add('active');
+            startBtn.disabled = true;
+            statusEl.textContent = 'טיימר שוחזר – ממשיך לרוץ';
+            startTimerInterval();
+          }
+        }
+      } catch {}
+    }
+
     function startCountdown() {
       if (masterPass.value !== MASTER_PASSWORD) {
         statusEl.textContent = "סיסמה שגויה";
@@ -232,17 +266,7 @@
           abortField.focus();
           startBtn.disabled = true;
 
-          timerId = setInterval(() => {
-            remaining--;
-            timerEl.textContent = format(remaining);
-
-            if (remaining <= 0) {
-              clearInterval(timerId);
-              timerEl.className = 'done';
-              timerEl.textContent = '00:00';
-              sendAlert("רגיל"); // התראה מקומית – האמיתית תגיע מהשרת
-            }
-          }, 1000);
+          startTimerInterval();
         } else {
           statusEl.textContent = "שגיאה: " + (data.body || "לא ידוע");
         }
@@ -269,6 +293,8 @@
     abortField.oninput = checkInputs;
     duressField.oninput = checkInputs;
     startBtn.onclick = startCountdown;
+
+    window.addEventListener('load', restoreTimer);
 
     reset();
   </script>
