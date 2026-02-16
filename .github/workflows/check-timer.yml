@@ -1,0 +1,12 @@
+name: Check Timer Every Minute
+
+on:
+  schedule:
+    - cron: '* * * * *'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger check-timer function
+        run: curl -X POST https://security34.netlify.app/.netlify/functions/check-timer || echo "Call failed"
