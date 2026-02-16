@@ -1,0 +1,13 @@
+name: Check Timer Every 5 Minutes
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger check
+        run: |
+          curl -X POST https://security34.netlify.app/.netlify/functions/check-timer
